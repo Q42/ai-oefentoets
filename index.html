@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Termen en definities - AI oefentoets</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+  <style>
+    body {
+      padding: 20px;
+      max-width: 700px;
+      position: relative;
+      margin: auto;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    output {
+      color: red;
+    }
+    .word {
+      text-align: center;
+      min-width: 120px;
+    }
+    .word:hover {
+      cursor: pointer;
+      background-color: lightgray;
+    }
+    table {
+      margin-top: 30px;
+      border-collapse: collapse;
+    }
+    table td {
+      border: 1px solid black;
+      padding: 10px;
+    }
+    
+    h1 img {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100px;
+    }
+
+    label, input, select, button, textarea {
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+    label {
+      width: 110px;
+      margin-right: 5px ;
+    }
+  </style>
+</head>
+<body>
+  <h1 class="text-3xl font-bold">
+    Termen en definities
+    <img src="logo.webp" alt="AI" width="150" height="150">
+  </h1>
+  <div id="app">
+    <div v-show="showForm">
+      <div>
+        <label>OpenAI key</label>
+        <input autocomplete="on" type="password" v-model="apiKey" placeholder="Voer je OpenAI key in">
+        <output>{{ error }}</output>
+      </div>
+
+      <div>
+        <label>Niveau</label>
+        <select v-model="grade">
+          <option value="3">Groep 3</option>
+          <option value="4">Groep 4</option>
+          <option value="5">Groep 5</option>
+          <option value="6">Groep 6</option>
+          <option value="7">Groep 7</option>
+          <option value="8">Groep 8</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Woorden</label>
+        <textarea v-model="input" placeholder="Voer de woorden in"></textarea>
+      </div>
+
+      <div>
+        <button type="submit" @click="submit">maak oefentoets</button>
+      </div>
+    </div>
+  
+    <div v-show="!showForm">
+      <a href="#" @click="showForm = true">&lt; Terug</a>
+      <table v-show="toets.vragen.length">
+        <tr>
+          <th>Term</th>
+          <th>Definities</th>
+        </tr>
+        <tr v-for="(vraag,index) in toets.vragen">
+          <td class="word" @click="clickWord(index)" title="klik voor een hint">{{ word(index) }}</td>
+          <td>
+            {{ vraag.definitie }}
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+  <script>
+    new Vue({
+      el: '#app',
+      data: {
+        apiKey: localStorage.getItem('apiKey'), 
+        input: '',
+        grade: 7,
+        toets: {
+          onderwerp: '',
+          vragen: [],
+        },
+        clicks: [],
+        error: null,
+        showForm: true
+      },
+      methods: {
+        async submit() {
+          if (!this.apiKey) {
+            this.error = 'Voer je OpenAI key in';
+            return;
+          }
+          this.error = null;
+          localStorage.setItem('apiKey', this.apiKey);
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`
+            },
+            body: JSON.stringify({
+              model: "gpt-3.5-turbo",
+              response_format: { "type": "json_object" },
+              messages: [
+                {
+                  "role": "system",
+                  "content": `Je bent een API service die oefentoetsen genereert in JSON formaat.
+                    Je maakt een taaltoets over definities van woorden.
+                    Het niveau v/d toets en de definities is groep ${this.grade}.
+                    De definities moeten simpel en duidelijk zijn.
+                    De definities mogen het woord in kwestie niet bevatten.
+                    De output voldoet aan:  { vragen: [ { woord: string, definitie: string } ] }`
+                },
+                {
+                  "role": "user",
+                  "content": "Voor de taaltoets, geef me definities voor de volgende woorden: " + this.input
+                },
+              ]
+            })
+          });
+
+          if (response.status == 401) {
+            this.error = 'Verkeerde OpenAI key';
+            localStorage.removeItem('apiKey');
+          } else {
+            const data = await response.json();
+            const toets = data.choices[0].message.content;
+            this.toets = JSON.parse(toets);
+            this.clicks = this.toets.vragen.map(() => 0);
+            this.showForm = false;
+          }
+        },
+        clickWord(index) {
+          this.clicks[index]++;
+          this.clicks = [...this.clicks];
+        },
+        word(index) {
+          const clicks = this.clicks[index];
+          if (clicks == 0) {
+            return '...';
+          }
+          if (clicks == 1) {
+            return this.toets.vragen[index].woord.slice(0, 1) + '...';
+          }
+          return this.toets.vragen[index].woord;
+        },
+      }
+  });
+  </script>
+</body>
+</html>
